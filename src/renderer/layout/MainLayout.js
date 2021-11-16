@@ -59,7 +59,12 @@ export default function MainLayout({children}) {
 
     const fetchAllFileInfo = async () => {
         const {accountId} = await window.walletConnection.account() 
-        const commonFiles = await window.contract.get_all_file_in_folder({folder_id: accountId})
+        const commonFilesRaw = await window.contract.get_all_file_in_folder({folder_id: accountId})
+
+        const commonFiles = commonFilesRaw.map(file => {
+            return {...file[0], id: file[1]}
+        })
+
         const rootSharedFolders = await window.contract.get_shared_folder_info({folder_id: accountId})
         const {children} = rootSharedFolders
         const sharedFolders = await Promise.all(children.map(child => {
@@ -67,14 +72,15 @@ export default function MainLayout({children}) {
                 return {...result, id: child}
             })
         }))
-        const sharedFilesByFolder = await Promise.all(sharedFolders.map(folder => {
+        const filesBySharedFolder = await Promise.all(sharedFolders.map(folder => {
             return window.contract.get_all_file_in_shared_folder({folder_id: folder.id}).then(result => {
                 return result.map(file => {
-                    return {...file, encrypted_password: folder.folder_password}
+                    return {...file[0], encrypted_password: folder.folder_password, id: file[1]}
                 })
             })
         }))
-        const sharedFiles = _.flattenDeep(sharedFilesByFolder)
+
+        const filesInSharedFolder = _.flattenDeep(filesBySharedFolder)
 
         const res = await window.contract.get_shared_folder_docs_by_owner({_account_id: accountId})
         const result = res.map(folder => {
@@ -96,7 +102,6 @@ export default function MainLayout({children}) {
         let sharedFilesWithMe = _.flattenDeep(sharedFilesWithMeByFolder)
 
         const sharedFilesDocWithMe = await window.contract.get_shared_file_docs_by_owner({_account_id: accountId})
-        console.log(sharedFilesDocWithMe)
 
         const sharedFilesTemp = sharedFilesDocWithMe.map(file => {
             return {
@@ -110,11 +115,7 @@ export default function MainLayout({children}) {
 
         sharedFilesWithMe = [...sharedFilesWithMe, ...sharedFilesTemp]
 
-        const myFiles = [...sharedFiles, ...commonFiles].map(file => {
-            return {...file[0], id: file[1]}
-        })
-
-        console.log(myFiles, sharedFilesWithMe)
+        const myFiles = [...filesInSharedFolder, ...commonFiles]
 
         const private_key = window.localStorage.getItem(`${accountId}_private_key`)
         window.electron.ipcRenderer.startSyncDataFromContract(current, myFiles, sharedFilesWithMe)
@@ -150,7 +151,6 @@ export default function MainLayout({children}) {
         }
         checkBeforeEnter()
         const currentURL = window.location.href
-        console.log(currentURL)
         if (currentURL.includes('login')) {
             setHideLayout(true)
         } else {
@@ -165,7 +165,6 @@ export default function MainLayout({children}) {
                 encryptedToken,
                 isValid
             } = args;
-            console.log(args)
             if (!isValid) {
                 message.error('Token invalid')
                 return
@@ -198,7 +197,26 @@ export default function MainLayout({children}) {
 
             }
         });
+
+        window.electron.ipcRenderer.on('create-shared-folder', async (args) => {
+            const {encrypted, data} = args
+            const {success, cipher} = encrypted
+            const currentTimeStamp = new Date().getTime()
+            if (success) {
+                const folder = {
+                    ...data,
+                    _password: cipher,
+                    _created_at: currentTimeStamp,
+                }
+                await window.contract.create_shared_folder(folder)
+                history.go(0)
+            } else {
+                message.error('fail to encode password')
+            }
+        })
+
         window.electron.ipcRenderer.on('encrypt-then-upload', async (args) => {
+            const currentTimeStamp = new Date().getTime()
             if (args.success) {
                 const dataToStore = {
                     _folder: args.folder, 
@@ -206,7 +224,8 @@ export default function MainLayout({children}) {
                     _cid: args.cid, 
                     _name: args.filename, 
                     _encrypted_password: args.encryptedPassword, 
-                    _file_type: args.type 
+                    _file_type: args.type,
+                    _last_update: currentTimeStamp
                 }
                 await window.contract.create_file(dataToStore)
                 history.go(0)
@@ -214,14 +233,36 @@ export default function MainLayout({children}) {
                 message.error('Failed to upload')
             }
         });
+
+        window.electron.ipcRenderer.on('encrypt-then-upload-to-shared-folder', async (args) => {
+            const currentTimeStamp = new Date().getTime()
+            console.log(args)
+            if (args.success) {
+                const dataToStore = {
+                    _folder: args.folder, 
+                    _file_id: args.id,
+                    _cid: args.cid, 
+                    _name: args.filename, 
+                    _file_type: args.type,
+                    _last_update: currentTimeStamp
+                }
+                await window.contract.create_shared_folder_file(dataToStore)
+                history.go(0)
+            } else {
+                message.error('Failed to upload')
+            }
+        });
+
         window.electron.ipcRenderer.on('encrypt-share-file-password', async (args) => {
             if (args.success) {
+                console.log(args)
                 const params = {
                     _file_id: args._file_id, 
                     _doc_id: args._doc_id, 
                     _share_with: args._share_with, 
                     _parent_folder: args._parent_folder, 
-                    _password: args._password
+                    _password: args._password,
+                    _permissions: args._permissions,
                 }
                 const data = await window.contract.share_file(params)
                 history.go(0)
@@ -230,10 +271,6 @@ export default function MainLayout({children}) {
             }
         })
     }, [])
-
-    
-
-    console.log(current)
 
     const formik = useFormik({
         initialValues: {

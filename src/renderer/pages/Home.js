@@ -32,7 +32,7 @@ import ShareFileButton from '../components/ShareFileButton'
 import DeleteButton from '../components/DeleteButton'
 import '../style/General.css';
 
-const { Dragger } = Upload;
+const { Dragger } = Upload
 
 const folderValidationSchema = Yup.object().shape({
     name: Yup.string().required('Invalid name'),
@@ -54,10 +54,12 @@ export default function Home() {
         validationSchema: folderValidationSchema,
         onSubmit: async (values) => {
             const id = uuidv4()
+            const currentTimeStamp = new Date().getTime()
             const folder = {
                 _id: id, 
                 _name: values.name, 
-                _parent: commonFolderCurrent.id
+                _parent: commonFolderCurrent.id,
+                _created_at: currentTimeStamp
             }
             const data = await window.contract.create_folder(folder)
             history.go(0)
@@ -98,36 +100,7 @@ export default function Home() {
         fetchData()
     }, [])
 
-    const storeToWeb3Storage = async (files, filename, fileType, encryptedPassword) => {
-        const totalSize = files.map(f => f.size).reduce((a, b) => a + b, 0)
-        let uploaded = 0
-
-        const onRootCidReady = cid => {
-            console.log('upcommonFolderLoading files with cid:', cid)
-        }
-    
-        const onStoredChunk = size => {
-            uploaded += size
-            const pct = uploaded / totalSize
-            console.log(`UpcommonFolderLoading... ${pct.toFixed(2) * 100}% complete`)
-        }
-
-        const cid = await storeFiles(userCurrent.web3token, files, onRootCidReady, onStoredChunk)
-        
-        await window.contract.create_file({
-            _folder: commonFolderCurrent.id, 
-            _file_id: uuidv4(),
-            _cid: cid, 
-            _name: filename, 
-            _encrypted_password: encryptedPassword, 
-            _file_type: fileType 
-        })
-        history.go(0)
-    }
-
     const fileSubmit = async (file) => {
-        // const worker = new Worker(worker)
-        // const {encryptByWorker} = wrap(worker)
         const web3Token = userCurrent.web3token
         const password = uuidv4()
         const id = uuidv4()
@@ -197,8 +170,20 @@ export default function Home() {
                 return (
                     <div>
                         {record.isFolder  ? 
-                            <a onClick={() => redirectToFolder(record.id)}>{!record.isTop && <FolderOpenOutlined />} {record.name}</a>:
-                            <span><FileProtectOutlined /> {record.name}</span>
+                            <a 
+                                onClick={() => redirectToFolder(record.id)}
+                            >
+                                {!record.isTop && <FolderOpenOutlined />} {record.name}
+                            </a> :
+                            <a 
+                                onClick={() => window.electron.ipcRenderer.decryptThenDownload(userCurrent.web3token , {
+                                    ...record,
+                                    privateKey: userCurrent.privateKey,
+                                    
+                                })}
+                            >
+                                <FileProtectOutlined /> {record.name}
+                            </a>
                         }
                     </div>
                 )
@@ -225,13 +210,6 @@ export default function Home() {
                                                 privateKey: userCurrent.privateKey
                                             }
                                         )
-                                        // const MattsRSAkey = createKeyPair(userCurrent.privateKey);
-                                        // const {plaintext, status} = rsaDecrypt(record.encrypted_password, MattsRSAkey)
-                                        // if (status === "success") {
-                                            
-                                        // } else {
-                                        //     message.error('Fail to download file')
-                                        // }
                                     }}
                                 >
                                     <DownloadOutlined />

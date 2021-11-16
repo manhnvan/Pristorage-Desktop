@@ -3,13 +3,18 @@ import '../style/General.css'
 import {
     DownloadOutlined,
     FolderOpenOutlined,
-    FileProtectOutlined
+    FileProtectOutlined,
+    FolderAddOutlined,
+    UploadOutlined,
+    InboxOutlined,
 } from '@ant-design/icons';
 import { 
     Table, 
-    Tabs,
     Tooltip,
     Button,
+    Upload,
+    Modal,
+    Input,
     message 
 } from 'antd';
 import { 
@@ -24,10 +29,19 @@ import {wrap} from 'comlink'
 import {getUrlParameter} from '../utils/url.utils'
 import {useHistory} from 'react-router-dom'
 import {getSharedFileInfo} from '../store/slice/sharedFileWithMe.slice'
+import { v4 as uuidv4 } from 'uuid';
+import {useFormik } from 'formik';
+import * as Yup from 'yup';
+import ShareFolderButton from '../components/ShareFolderButton'
+import DeleteButton from '../components/DeleteButton'
 
-const { TabPane } = Tabs;
+const { Dragger } = Upload
 
-export default function Shared() {
+const folderValidationSchema = Yup.object().shape({
+    name: Yup.string().required('Invalid folder name'),
+});
+
+export default function SharedWithMe() {
 
     const history = useHistory()
 
@@ -36,6 +50,70 @@ export default function Shared() {
     const {current: foldersSharedWithMe, loading: foldersSharedWithMeLoading, root: rootFoldersSharedToMe } = useSelector(state => state.sharedFolderWithMe)
     const {current: filesSharedWithMe, loading: filesSharedWithMeLoading} = useSelector(state => state.sharedFileWithMe)
     const {loading: loadingCurrent, current: userCurrent} = useSelector(state => state.user)
+    const [permission, setPermission] = useState(1)
+    
+    const formik = useFormik({
+        initialValues: {
+            name: '',
+        },
+        validationSchema: folderValidationSchema,
+        onSubmit: async (values) => {
+            const password = uuidv4()
+            const id =  uuidv4()
+            const publicKey = userCurrent.publicKey
+            const data = {
+                _id: id, 
+                _name: values.name, 
+                _parent: foldersSharedWithMe.id,
+                _account_id: accountId
+            }
+            window.electron.ipcRenderer.createSharedFolder(publicKey, password, data)
+        }
+    })
+
+    const {values, errors, handleChange, handleSubmit, setFieldValue} = formik
+
+    const [isModalCreateFolderVisible, setIsModalCreateFolderVisible] = useState(false);
+    const [isModalUploadVisible, setIsModalUploadVisible] = useState(false);
+
+    const showModalCreateFolder = () => {
+        setIsModalCreateFolderVisible(true);
+    };
+    
+    const handleCancelCreateFolder = () => {
+        setIsModalCreateFolderVisible(false);
+    };
+
+    const showModalUpload = () => {
+        setIsModalUploadVisible(true);
+    };
+    
+    const handleUpload = () => {
+        setIsModalUploadVisible(false);
+    };
+    
+    const handleCancelUpload = () => {
+        setIsModalUploadVisible(false);
+    };
+    
+    const fileSubmit = async (file) => {
+        const {rootId} = foldersSharedWithMe
+        const rootFolder = rootFoldersSharedToMe.find(folder => folder.id === rootId)
+        const web3Token = userCurrent.web3token
+        const id = uuidv4()
+        if (rootFolder) {
+            const {sharedPassword} = rootFolder
+            window.electron.ipcRenderer.encryptThenUploadToSharedFolder(web3Token, file.path, sharedPassword, {
+                filename: file.name,
+                type: file.type,
+                id,
+                folder: foldersSharedWithMe.id, 
+                privateKey: userCurrent.privateKey,
+                publicKey: userCurrent.publicKey
+            })
+        }
+    }
+
     
     useEffect(() => {
         const fetchData = async () => {
@@ -53,6 +131,17 @@ export default function Shared() {
         fetchData()
     }, [])
 
+    useEffect(() => {
+        if (rootFoldersSharedToMe.length && foldersSharedWithMe?.rootId) {
+            const {rootId} = foldersSharedWithMe
+            const sharedDoc = rootFoldersSharedToMe.find(doc => doc.id === rootId)
+            console.log(sharedDoc)
+            if (sharedDoc) {
+                setPermission(sharedDoc.permissions)
+            }
+        } 
+    }, [rootFoldersSharedToMe, foldersSharedWithMe])
+
     const redirectToFolder = (id, owner) => {
         if (id === owner) {
             console.log(id, owner)
@@ -65,43 +154,21 @@ export default function Shared() {
         
     }
 
-    const downloadFileInSharedFolder = async (record) => {
-        const {rootId} = foldersSharedWithMe
-        const sharedDoc = rootFoldersSharedToMe.find(doc => doc.id === rootId)
-        // if (sharedDoc) {
-        //     const {sharedPassword} = sharedDoc
-        //     const MattsRSAkey = createKeyPair(userCurrent.privateKey);
-        //     const {plaintext, status} = rsaDecrypt(sharedPassword, MattsRSAkey)
-        //     if (status === "success") {
-                
-        //     } else {
-        //         message.error('Fail to decrypt folder password')
-        //     }
-        // } else {
-        //     message.error('Fail to decrypt folder password')
-        // }
-    }
+    const props = {
+        name: 'file',
+        multiple: true,
+        onChange(info) {
+            const { status } = info.file;
+            if (status !== 'uploading') {
+                fileSubmit(info.file.originFileObj)
+            }
+        },
+        onDrop(e) {
+            console.log('Dropped files', e.dataTransfer.files);
+            fileSubmit(e.dataTransfer.files[0])
+        },
+    };
 
-    const downloadSharedFile = async (record) => {
-        // const MattsRSAkey = createKeyPair(userCurrent.privateKey);
-        // const {plaintext, status} = rsaDecrypt(record.sharedPassword, MattsRSAkey)
-        // if (status === "success") {
-        //     const files = await retrieveFiles(userCurrent.web3token, record.cid)
-        //     const worker = new Worker('../worker.js')
-        //     const {decryptByWorker} = wrap(worker)
-        //     const decryptedFile = await decryptByWorker(files, record.name, plaintext)
-        // } else {
-        //     message.error('fail to download file')
-        // }
-    }
-
-    const download = async (record) => {
-        if (record.isSharedFolderFile) {
-            await downloadFileInSharedFolder(record)
-        } else {
-            await downloadSharedFile(record)
-        }
-    }
 
     const columns = [
         {
@@ -134,13 +201,7 @@ export default function Shared() {
             render(text, record) {
                 return (
                     <div>
-                        {!record.isFolder  && !record.isTop && <div className="d-flex justify-content-evenly">
-                            <Tooltip title="Download">
-                                <Button onClick={() => download(record)}>
-                                    <DownloadOutlined />
-                                </Button>
-                            </Tooltip>
-                        </div>}
+                        
                     </div>
                 )
             }
@@ -210,6 +271,53 @@ export default function Shared() {
                 <hr />
             </div>
             <div className="content">
+            {permission === 2 && <div className="actions d-flex justify-content-end">
+                    <div className="action-button">
+                        <Button 
+                            icon={<FolderAddOutlined style={{ fontSize: '18px' }} />} 
+                            onClick={showModalCreateFolder} 
+                        >
+                            Create folder
+                        </Button>
+                        <Modal 
+                            title="Create folder" 
+                            visible={isModalCreateFolderVisible} 
+                            onOk={handleSubmit} 
+                            onCancel={handleCancelCreateFolder}
+                        >
+                            <label className="form-label">Folder name</label>
+                            <div className="input-group mb-3">
+                                <Input placeholder="Folder name" onChange={handleChange('name')} />
+                            </div>
+                            {errors.name && <span className="error-text">{errors.name}</span>}
+                        </Modal>
+                    </div>
+                    <div className="action-button">
+                        <Button 
+                            icon={<UploadOutlined style={{ fontSize: '18px' }} />} 
+                            onClick={showModalUpload}
+                        >
+                            Upload file
+                        </Button>
+                        <Modal 
+                            title="Upload file" 
+                            visible={isModalUploadVisible} 
+                            onCancel={handleCancelUpload}
+                            footer={[]}
+                        >
+                            <Dragger {...props}>
+                                <p className="ant-upload-drag-icon">
+                                    <InboxOutlined />
+                                </p>
+                                <p className="ant-upload-text">Click or drag file to this area to upload</p>
+                                <p className="ant-upload-hint">
+                                    Support for a single or bulk upload. Strictly prohibit from uploading company data or other
+                                    band files
+                                </p>
+                            </Dragger>,
+                        </Modal>
+                    </div>
+                </div>}
                 <div className="list-items mt-3">
                     <div className="mt-3">
                         <Table 

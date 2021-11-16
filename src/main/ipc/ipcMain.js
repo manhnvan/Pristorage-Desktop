@@ -78,6 +78,12 @@ export function createIPCMain(ipcMain) {
         event.reply('decrypt-string-data', decrypted);
     })
 
+    ipcMain.on('create-shared-folder', async (event, args) => {
+        const {publicKey, password ,data} = args
+        const encrypted = await encryptStringTypeData(publicKey, password)
+        event.reply('create-shared-folder', {encrypted, data});
+    })
+
     ipcMain.on('encrypt-share-file-password', async (event, args) => {
         const {sharePublicKey, ownerPrivateKey, encryptedPassword, docInfo} = args;
         const {success, plaintext} = await decryptStringTypeData(ownerPrivateKey, encryptedPassword);
@@ -94,80 +100,127 @@ export function createIPCMain(ipcMain) {
     })
 
     ipcMain.on('encrypt-then-upload', async (event, args) => {
-        const {web3Token, path, password, fileInfo} = args
+        const {web3Token, path: filePath, password, fileInfo} = args
+        const {id} = fileInfo
+        const childProcess = fork(path.join(__dirname, '../bgProcess/fileEncrypt.js'))
+        childProcess.send({type: 'start', info: {
+            filePath,
+            id,
+            password
+        }})
+        childProcess.on('message', async function (data) {
+            const {success, encDir, tempDir} = data
+            if (success) {
+                const {success: passwordEncryptedStatus, cipher: passwordEncrypted} = await encryptStringTypeData(fileInfo.publicKey, password) 
+                if (passwordEncryptedStatus) {
+                    const pathFiles = await getFilesFromPath(encDir)
+                    const cid = await storeFiles(web3Token, pathFiles);
+                    event.reply('encrypt-then-upload', {
+                        success,
+                        ...fileInfo,
+                        cid,
+                        encryptedPassword: passwordEncrypted
+                    });
+                    fs.rmdirSync(tempDir, { recursive: true, force: true })
+                    fs.rmdirSync(encDir, { recursive: true, force: true })
+                }
+            }
+        })
+    })
+
+    ipcMain.on('open-file', async (event, args) => {
         console.log(args)
-        const buffer = fs.readFileSync(path)
-        const encrypted = await encryptSingleFile(buffer, fileInfo.filename, password);
-        const {success, cipher} = await encryptStringTypeData(fileInfo.publicKey, password) 
-        if (success) {
-            fs.writeFile(`${APP_STORE_TEMP}/${fileInfo.id}.enc`, encrypted, async function (err) {
-                if (err) return console.log(err);
-                const pathFiles = await getFilesFromPath(`${APP_STORE_TEMP}/${fileInfo.id}.enc`)
-                const cid = await storeFiles(web3Token, pathFiles);
-                event.reply('encrypt-then-upload', {
-                    success,
-                    ...fileInfo,
-                    cid,
-                    encryptedPassword: cipher
-                });
-                fs.unlink(`${APP_STORE_TEMP}/${fileInfo.id}.enc`, function(err) {
-                    if(err && err.code == 'ENOENT') {
-                        // file doens't exist
-                        console.info("File doesn't exist, won't remove it.");
-                    } else if (err) {
-                        // other errors, e.g. maybe we don't have enough permission
-                        console.error("Error occurred while trying to remove file");
-                    } else {
-                        console.info(`removed`);
-                    }
-                });
-            });
-        } else {
-            event.reply('encrypt-then-upload', {
-                success: false
+    })
+
+    ipcMain.on('encrypt-then-upload-to-shared-folder', async (event, args) => {
+        const {web3Token, path: filePath, password, fileInfo} = args
+        console.log(args)
+        const {id} = fileInfo
+        const {success: decryptedPasswordStatus, plaintext: decryptedPassword} = await decryptStringTypeData(fileInfo.privateKey, password) 
+        if (decryptedPasswordStatus) {
+            const childProcess = fork(path.join(__dirname, '../bgProcess/fileEncrypt.js'))
+            childProcess.send({type: 'start', info: {
+                filePath,
+                id,
+                password: decryptedPassword
+            }})
+            childProcess.on('message', async function (data) {
+                const {success, encDir, tempDir} = data
+                if (success) {
+                    const pathFiles = await getFilesFromPath(encDir)
+                    const cid = await storeFiles(web3Token, pathFiles);
+                    event.reply('encrypt-then-upload-to-shared-folder', {
+                        success,
+                        ...fileInfo,
+                        cid
+                    });
+                    fs.rmdirSync(tempDir, { recursive: true, force: true })
+                    fs.rmdirSync(encDir, { recursive: true, force: true })
+                }
             })
         }
     })
 
     ipcMain.on('decrypt-then-download', async (event, args) => {
         const {web3Token, info} = args
-        const {cid, encrypted_password, file_type, id, privateKey, name} = info
-        const fileRetrieve = await retrieveFiles(web3Token, cid)
-        const file = fileRetrieve[0]
+        console.log(args)
+        const {cid, encrypted_password, id, privateKey, name} = info
         const { success, plaintext } = await decryptStringTypeData(privateKey, encrypted_password)
+        console.log(success, plaintext)
         if (success) {
-            const decrypted = await decryptSingleFile(file, plaintext)
-            const buffer = Buffer.from( await decrypted.arrayBuffer() );
-            fs.writeFile(`${APP_STORE_MY_FILES_FOLDER}/${id}_${cid}_${name}`, buffer, function (err) {
-                if (err) {
-                    console.log(err);
-                }
-            });
+            const childProcess = fork(path.join(__dirname, '../bgProcess/retrieveAndDecrypt.js'))
+            childProcess.send({type: 'start', info: {
+                web3Token, 
+                info,
+                cid,
+                id,
+                name,
+                password: plaintext
+            }})
+            childProcess.on('message', async function (data) {
+                console.log(data);
+                // const {success, encDir, tempDir} = data
+                // if (success) {
+                //     const pathFiles = await getFilesFromPath(encDir)
+                //     const cid = await storeFiles(web3Token, pathFiles);
+                //     event.reply('encrypt-then-upload-to-shared-folder', {
+                //         success,
+                //         ...fileInfo,
+                //         cid
+                //     });
+                //     fs.rmdirSync(tempDir, { recursive: true, force: true })
+                //     fs.rmdirSync(encDir, { recursive: true, force: true })
+                // }
+            })
         }
+        
+
+
+        // const fileRetrieve = await retrieveFiles(web3Token, cid)
+        // const file = fileRetrieve[0]
+        // const { success, plaintext } = await decryptStringTypeData(privateKey, encrypted_password)
+        // if (success) {
+        //     const decrypted = await decryptSingleFile(file, plaintext)
+        //     const buffer = Buffer.from( await decrypted.arrayBuffer() );
+        //     fs.writeFile(`${APP_STORE_FOLDER}/${id}_${cid}_${name}`, buffer, function (err) {
+        //         if (err) {
+        //             console.log(err);
+        //         }
+        //     });
+        // }
     })
+
     ipcMain.on('start-sync-data-from-contract', async (event, args) => {
         const {user ,myFiles ,sharedFilesWithMe} = args
-        // if (fs.existsSync(path)) {
-        //     //file exists
-
-        // }
-
-        const jsonFilesData = JSON.stringify(myFiles)
+        const data = [...myFiles, ...sharedFilesWithMe]
+        const jsonFilesData = JSON.stringify(data)
         fs.writeFile(SYNC_MY_FILE_JSON, jsonFilesData, 'utf8', function (err) {
             if (err) {
                 console.log(err);
             }
-
-        });
-        const jsonSharedWithFilesData = JSON.stringify(sharedFilesWithMe)
-        fs.writeFile(SYNC_FILES_SHARED_WITH_ME, jsonSharedWithFilesData, 'utf8', function (err) {
-            if (err) {
-                console.log(err);
-            }
-            const child = fork(path.join(__dirname, '../bgProcess/syncShareWithMeFile.js'))
-
-            child.send({type: 'start', info: user})
-            child.on('message', function (data) {
+            const syncFilesChild = fork(path.join(__dirname, '../bgProcess/syncFile.js'))
+            syncFilesChild.send({type: 'start', info: user})
+            syncFilesChild.on('message', function (data) {
                 console.log(data)
             })
         });

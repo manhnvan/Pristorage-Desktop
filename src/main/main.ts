@@ -11,8 +11,6 @@ import fs from 'fs';
 import {
   APP_STORE_FOLDER,
   APP_STORE_TEMP,
-  APP_STORE_MY_FILES_FOLDER,
-  APP_STORE_FILES_SHARED_WITH_ME
 } from './constant'
 
 
@@ -68,37 +66,7 @@ const createWindow = async () => {
       if (err) {
         return console.error(err);
       }
-      console.log('Directory created successfully!');
-      fs.mkdir(APP_STORE_MY_FILES_FOLDER, (err) => {
-        if (err) {
-          return console.error(err);
-        }
-        console.log('Directory created successfully!');
-      });
-      fs.mkdir(APP_STORE_FILES_SHARED_WITH_ME, (err) => {
-        if (err) {
-          return console.error(err);
-        }
-        console.log('Directory created successfully!');
-      });
     });
-  } else {
-    if (!fs.existsSync(APP_STORE_MY_FILES_FOLDER)) {
-      fs.mkdir(APP_STORE_MY_FILES_FOLDER, (err) => {
-        if (err) {
-          return console.error(err);
-        }
-        console.log('Directory created successfully!');
-      });
-    }
-    if (!fs.existsSync(APP_STORE_FILES_SHARED_WITH_ME)) {
-      fs.mkdir(APP_STORE_FILES_SHARED_WITH_ME, (err) => {
-        if (err) {
-          return console.error(err);
-        }
-        console.log('Directory created successfully!');
-      });
-    }
   }
   if (!fs.existsSync(APP_STORE_TEMP)) {
     fs.mkdir(APP_STORE_TEMP, (err) => {

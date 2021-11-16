@@ -1,6 +1,7 @@
 const CryptoJS = require("crypto-js")
 const { Blob, Buffer } = require('buffer')
 const {File} = require('web3.storage')
+const splitFile = require('split-file');
 
 const FILE_MAX_SIZE = 30000 * 1024
 
@@ -176,6 +177,30 @@ async function decryptSingleFile(file, password) {
     return fileDec
 }
 
+const splitFileFunc = (path, maxSize, dir) => {
+    return new Promise((resolve, reject) => {
+        splitFile.splitFileBySize(path, maxSize, dir)
+        .then((names) => {
+            resolve(names)
+        })
+        .catch((err) => {
+            reject(err)
+        });
+    })
+}
+
+const mergeFilesFunc = (names, outputDir) => {
+    return new Promise((resolve, reject) => {
+        splitFile.mergeFiles(names, outputDir)
+        .then(() => {
+            resolve(true)
+        })
+        .catch((err) => {
+            reject(err)
+        });
+    })
+} 
+
 module.exports = {
     createChunks,
     concatenateBlobs,
@@ -188,5 +213,8 @@ module.exports = {
     convertWordArrayToUint8Array,
     getFileAsText,
     decrypt,
-    decryptSingleFile
+    decryptSingleFile,
+    splitFileFunc,
+    mergeFilesFunc
 }
+

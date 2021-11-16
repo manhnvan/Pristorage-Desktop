@@ -8,7 +8,9 @@ const validChannels = [
   'get-public-key-by-private-key',
   'encrypt-then-upload',
   'encrypt-share-file-password',
-  'start-sync-data-from-contract'
+  'start-sync-data-from-contract',
+  'create-shared-folder',
+  'encrypt-then-upload-to-shared-folder'
 ];
 
 contextBridge.exposeInMainWorld('electron', {
@@ -22,8 +24,17 @@ contextBridge.exposeInMainWorld('electron', {
     decryptStringTypeData(privateKey, data) {
       ipcRenderer.send('decrypt-string-data', {privateKey, data});
     },
+    createSharedFolder(publicKey, password ,data) {
+      ipcRenderer.send('create-shared-folder', {publicKey, password ,data});
+    },
+    openFile(fileInfo) {
+      ipcRenderer.send('open-file', {fileInfo});
+    },
     encryptThenUpload(web3Token, path, password, fileInfo) {
       ipcRenderer.send('encrypt-then-upload', {web3Token, path, password, fileInfo});
+    },
+    encryptThenUploadToSharedFolder(web3Token, path, password, fileInfo) {
+      ipcRenderer.send('encrypt-then-upload-to-shared-folder', {web3Token, path, password, fileInfo});
     },
     decryptThenDownload(web3Token, info) {
       ipcRenderer.send('decrypt-then-download', {web3Token, info});

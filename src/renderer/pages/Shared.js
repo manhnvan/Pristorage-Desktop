@@ -52,25 +52,16 @@ export default function Shared() {
         },
         validationSchema: folderValidationSchema,
         onSubmit: async (values) => {
-            // const folder_password = uuidv4()
-            // const MattsRSAkey = createKeyPair(userCurrent.privateKey);
-            // const MattsPublicKeyString = createPubKeyString(MattsRSAkey)
-            // const {status, cipher} = rsaEncrypt(folder_password, MattsPublicKeyString)
-            // if (status === "success") {
-            //     const id = uuidv4()
-            //     const {accountId} = await window.walletConnection.account()
-            //     const folder = {
-            //         _id: id, 
-            //         _name: values.name, 
-            //         _parent: current.id,
-            //         _password: cipher,
-            //         _account_id: accountId
-            //     }
-            //     await window.contract.create_shared_folder(folder)
-            //     history.go(0)
-            // } else {
-            //     message.error('fail to encode password')
-            // }
+            const password = uuidv4()
+            const id =  uuidv4()
+            const publicKey = userCurrent.publicKey
+            const data = {
+                _id: id, 
+                _name: values.name, 
+                _parent: current.id,
+                _account_id: accountId
+            }
+            window.electron.ipcRenderer.createSharedFolder(publicKey, password, data)
         }
     })
 
@@ -112,39 +103,20 @@ export default function Shared() {
         fetchData()
     }, [])
 
-    const storeToWeb3Storage = async (files, filename, fileType, encryptedPassword) => {
-        const totalSize = files.map(f => f.size).reduce((a, b) => a + b, 0)
-        let uploaded = 0
-
-        const onRootCidReady = cid => {
-            console.log('uploading files with cid:', cid)
-        }
-    
-        const onStoredChunk = size => {
-            uploaded += size
-            const pct = uploaded / totalSize
-            console.log(`Uploading... ${pct.toFixed(2) * 100}% complete`)
-        }
-
-        history.go(0)
-    }
-
     const fileSubmit = async (file) => {
         const {root} = current
+        const web3Token = userCurrent.web3token
+        const id = uuidv4()
         if (root) {
-            // const {folder_password: folderPassword} = root
-            // const MattsRSAkey = createKeyPair(userCurrent.privateKey);
-            // const {status, plaintext: folderDecryptedPassword} = rsaDecrypt(folderPassword, MattsRSAkey)
-            // if (status === "success") {
-            //     const worker = new Worker('../worker.js')
-            //     const {encryptByWorker} = wrap(worker)
-            //     const encryptedFiles = await encryptByWorker(file, folderDecryptedPassword)
-            //     await storeToWeb3Storage(encryptedFiles, file.name, file.type)
-            //     setIsModalUploadVisible(false)
-            //     history.go(0)
-            // } else {
-            //     message.error('Fail to encrypt file ' + file.name)
-            // }
+            const {folder_password: folderPassword} = root
+            window.electron.ipcRenderer.encryptThenUploadToSharedFolder(web3Token, file.path, folderPassword, {
+                filename: file.name,
+                type: file.type,
+                id,
+                folder: current.id, 
+                privateKey: userCurrent.privateKey,
+                publicKey: userCurrent.publicKey
+            })
         }
     }
 
@@ -221,22 +193,6 @@ export default function Shared() {
                 return (
                     <div>
                         {!record.isFolder && !record.isTop && <div className="d-flex justify-content-evenly">
-                            <Tooltip title="Download">
-                                <Button
-                                    onClick={async () => {
-                                        // const {root} = current
-                                        // const MattsRSAkey = createKeyPair(userCurrent.privateKey);
-                                        // const {plaintext, status} = rsaDecrypt(root.folder_password, MattsRSAkey)
-                                        // if (status === "success") {
-                                            
-                                        // } else {
-                                        //     message.error('Fail to download file')
-                                        // }
-                                    }}
-                                >
-                                    <DownloadOutlined />
-                                </Button>
-                            </Tooltip>
                             <Tooltip title="Remove">
                                 <DeleteButton 
                                     type="File" 
