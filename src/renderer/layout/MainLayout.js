@@ -123,7 +123,7 @@ export default function MainLayout({children}) {
 
     useEffect(() => {
         if (current?.privateKey) {
-            fetchAllFileInfo()
+            window.electron.ipcRenderer.shouldSyncStart()
         }
     }, [current])
 
@@ -198,6 +198,14 @@ export default function MainLayout({children}) {
             }
         });
 
+        window.electron.ipcRenderer.on('should-start-sync', async (args) => {
+            console.log(args)
+            const {shouldStartSync} = args
+            if (shouldStartSync) {
+                fetchAllFileInfo()
+            }
+        })
+
         window.electron.ipcRenderer.on('create-shared-folder', async (args) => {
             const {encrypted, data} = args
             const {success, cipher} = encrypted
@@ -230,13 +238,37 @@ export default function MainLayout({children}) {
                 await window.contract.create_file(dataToStore)
                 history.go(0)
             } else {
-                message.error('Failed to upload')
+                if (args.message) {
+                    message.warning(args.message)
+                } else {
+                    message.error('Failed to upload')
+                }
+            }
+        });
+
+        window.electron.ipcRenderer.on('update-file', async (args) => {
+            const currentTimeStamp = new Date().getTime()
+            console.log(args)
+            if (args.success) {
+                const dataToStore = {
+                    _id: args.id,
+                    _cid: args.cid, 
+                    _owner: args.owner, 
+                    _last_update: currentTimeStamp
+                }
+                await window.contract.update_file(dataToStore)
+                history.go(0)
+            } else {
+                if (args.message) {
+                    message.warning(args.message)
+                } else {
+                    message.error('Failed to upload')
+                }
             }
         });
 
         window.electron.ipcRenderer.on('encrypt-then-upload-to-shared-folder', async (args) => {
             const currentTimeStamp = new Date().getTime()
-            console.log(args)
             if (args.success) {
                 const dataToStore = {
                     _folder: args.folder, 
@@ -249,13 +281,16 @@ export default function MainLayout({children}) {
                 await window.contract.create_shared_folder_file(dataToStore)
                 history.go(0)
             } else {
-                message.error('Failed to upload')
+                if (args.message) {
+                    message.warning(args.message)
+                } else {
+                    message.error('Failed to upload')
+                }
             }
         });
 
         window.electron.ipcRenderer.on('encrypt-share-file-password', async (args) => {
             if (args.success) {
-                console.log(args)
                 const params = {
                     _file_id: args._file_id, 
                     _doc_id: args._doc_id, 
@@ -265,6 +300,22 @@ export default function MainLayout({children}) {
                     _permissions: args._permissions,
                 }
                 const data = await window.contract.share_file(params)
+                history.go(0)
+            } else {
+                message.error(args.reason)
+            }
+        })
+
+        window.electron.ipcRenderer.on('encrypt-share-folder-password', async (args) => {
+            if (args.success) {
+                const params = {
+                    _folder_id: args._folder_id, 
+                    _doc_id: args._doc_id, 
+                    _share_with: args._share_with, 
+                    _password: args._password,
+                    _permissions: args._permissions,
+                }
+                const data = await window.contract.share_folder(params)
                 history.go(0)
             } else {
                 message.error(args.reason)

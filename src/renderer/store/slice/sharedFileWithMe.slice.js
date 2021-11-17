@@ -11,7 +11,7 @@ export const getSharedFileInfo = createAsyncThunk(
                 owner: file[0],
                 id: file[1],
                 sharedPassword: file[2],
-                permission: file[4]
+                permission: file[4],
             }
         })
         return result

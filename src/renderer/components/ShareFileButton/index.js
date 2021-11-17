@@ -4,6 +4,7 @@ import {
     Modal, 
     Input,
     Select,
+    Tooltip,
     message
 } from 'antd'
 import {
@@ -74,9 +75,11 @@ const ShareFileButton = (props) => {
 
     return (
         <>
-        <Button onClick={showModalShare}>
-            <ShareAltOutlined />
-        </Button>
+        <Tooltip title="Share">
+            <Button onClick={showModalShare}>
+                <ShareAltOutlined />
+            </Button>
+        </Tooltip>
         <Modal 
             title="Share file" 
             visible={isModalShareVisible} 

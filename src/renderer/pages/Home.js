@@ -30,6 +30,7 @@ import {getUrlParameter} from '../utils/url.utils'
 import { useHistory } from 'react-router-dom';
 import ShareFileButton from '../components/ShareFileButton'
 import DeleteButton from '../components/DeleteButton'
+import SyncFileButton from '../components/SyncFileButton'
 import '../style/General.css';
 
 const { Dragger } = Upload
@@ -176,7 +177,7 @@ export default function Home() {
                                 {!record.isTop && <FolderOpenOutlined />} {record.name}
                             </a> :
                             <a 
-                                onClick={() => window.electron.ipcRenderer.decryptThenDownload(userCurrent.web3token , {
+                                onClick={() => window.electron.ipcRenderer.openFile(userCurrent.web3token , {
                                     ...record,
                                     privateKey: userCurrent.privateKey,
                                     
@@ -199,37 +200,18 @@ export default function Home() {
                 return (
                     <div>
                         {!record.isFolder && !record.isTop && <div className="d-flex justify-content-evenly">
-                            <Tooltip title="Download">
-                                <Button
-                                    onClick={async () => {
-                                        console.log(record)
-                                        window.electron.ipcRenderer.decryptThenDownload(
-                                            userCurrent.web3token, 
-                                            {
-                                                ...record, 
-                                                privateKey: userCurrent.privateKey
-                                            }
-                                        )
-                                    }}
-                                >
-                                    <DownloadOutlined />
-                                </Button>
-                            </Tooltip>
+                            <SyncFileButton {...record} />
 
-                            <Tooltip title="Share">
-                                <ShareFileButton {...{...record, folder: commonFolderCurrent.id}} />
-                            </Tooltip>
+                            <ShareFileButton {...{...record, folder: commonFolderCurrent.id}} />
 
-                            <Tooltip title="Remove">
-                                <DeleteButton 
-                                    type="File" 
-                                    name={record.name} 
-                                    handleDelete={async () => {
-                                        await window.contract.remove_file({_folder: commonFolderCurrent.id, _file: record.id})
-                                        history.go(0)
-                                    }}
-                                />
-                            </Tooltip>
+                            <DeleteButton 
+                                type="File" 
+                                name={record.name} 
+                                handleDelete={async () => {
+                                    await window.contract.remove_file({_folder: commonFolderCurrent.id, _file: record.id})
+                                    history.go(0)
+                                }}
+                            />
                         </div>}
                         {record.isFolder && !record.isTop && <div className="d-flex justify-content-evenly">
                             <Tooltip title="Remove">

@@ -2,6 +2,7 @@ import React from 'react';
 import { 
     Button, 
     Modal, 
+    Tooltip
 } from 'antd'
 import {
     DeleteOutlined,
@@ -32,9 +33,11 @@ const DeleteButton = (props) => {
 
     return (
         <>
-        <Button danger onClick={showConfirm}>
-            <DeleteOutlined />
-        </Button>
+        <Tooltip title="Remove">
+            <Button danger onClick={showConfirm}>
+                <DeleteOutlined />
+            </Button>
+        </Tooltip>
         </>
     )
 }

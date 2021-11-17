@@ -34,6 +34,8 @@ import {useFormik } from 'formik';
 import * as Yup from 'yup';
 import ShareFolderButton from '../components/ShareFolderButton'
 import DeleteButton from '../components/DeleteButton'
+import SyncSharedFolderFileButton from '../components/SyncSharedFolderFileButton'
+import SyncSharedFileWithMeButton from '../components/SyncSharedFileWithMeButton'
 
 const { Dragger } = Upload
 
@@ -51,6 +53,7 @@ export default function SharedWithMe() {
     const {current: filesSharedWithMe, loading: filesSharedWithMeLoading} = useSelector(state => state.sharedFileWithMe)
     const {loading: loadingCurrent, current: userCurrent} = useSelector(state => state.user)
     const [permission, setPermission] = useState(1)
+    const [root, setRoot] = useState(null)
     
     const formik = useFormik({
         initialValues: {
@@ -120,11 +123,9 @@ export default function SharedWithMe() {
             await dispatch(getSharedFoldersWithMeInfo());
             const folderId = getUrlParameter('folder')
             const owner = getUrlParameter('owner')
-            console.log(folderId, owner)
             if (folderId && owner) {
                 await dispatch(getSharedFolderById({id: folderId, owner: owner}))
             } else {
-                console.log('calling function')
                 await dispatch(getSharedFileInfo());
             }
         }
@@ -135,16 +136,15 @@ export default function SharedWithMe() {
         if (rootFoldersSharedToMe.length && foldersSharedWithMe?.rootId) {
             const {rootId} = foldersSharedWithMe
             const sharedDoc = rootFoldersSharedToMe.find(doc => doc.id === rootId)
-            console.log(sharedDoc)
             if (sharedDoc) {
                 setPermission(sharedDoc.permissions)
+                setRoot(sharedDoc)
             }
         } 
     }, [rootFoldersSharedToMe, foldersSharedWithMe])
 
     const redirectToFolder = (id, owner) => {
         if (id === owner) {
-            console.log(id, owner)
             history.push(`/shared_with_me`)
             history.go(0)
         } else {
@@ -179,7 +179,15 @@ export default function SharedWithMe() {
                     <div>
                         {record.isFolder  ? 
                             <a onClick={() => redirectToFolder(record.id, record.owner)}>{!record.isTop && <FolderOpenOutlined />} {record.name}</a>:
-                            <span><FileProtectOutlined /> {record.name}</span>
+                            <a 
+                                onClick={() => window.electron.ipcRenderer.openFile(userCurrent.web3token , {
+                                    ...record,
+                                    privateKey: userCurrent.privateKey,
+                                    
+                                })}
+                            >
+                                <FileProtectOutlined /> {record.name}
+                            </a>
                         }
                     </div>
                 )
@@ -201,7 +209,12 @@ export default function SharedWithMe() {
             render(text, record) {
                 return (
                     <div>
-                        
+                        {record.isSharedFolderFile && permission === 2 && <SyncSharedFolderFileButton 
+                            {...record} 
+                            root={{...root, folder_password: root.sharedPassword}} 
+                            folder={foldersSharedWithMe.id}
+                        />}
+                        {!record.isSharedFolderFile && !record.isTop && record.permission === 2 && <SyncSharedFileWithMeButton {...record} />}
                     </div>
                 )
             }
@@ -233,7 +246,6 @@ export default function SharedWithMe() {
                 isSharedFolderFile: false,
             }
         })
-        console.log(filesSharedWithMe, sharedFiles)
         if (foldersSharedWithMe.owner === foldersSharedWithMe.parent) {
             setData([
                 {

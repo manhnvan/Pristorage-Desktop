@@ -113,7 +113,6 @@ async function encryptSingleFile(file, password) {
     var wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
     var encrypted = CryptoJS.AES.encrypt(wordArray, key).toString();
     var fileEnc = new Blob([encrypted]);
-    console.log(`encrypted file ${file.name}`)
     return new File([fileEnc], file.name + ".enc");
 }
 
@@ -155,12 +154,9 @@ async function decrypt(files, fileName, password) {
 }
 
 async function decryptSingleFile(file, password) {
-    console.log(file)
     var key = password;  
-    console.log(key)
     const textFile = await getFileAsText(file) 
     var decrypted = CryptoJS.AES.decrypt(textFile, key);
-    console.log(decrypted)
     var typedArray = convertWordArrayToUint8Array(decrypted);
     var fileDec = new Blob([typedArray]);
     return fileDec

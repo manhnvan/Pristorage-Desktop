@@ -11,6 +11,7 @@ import fs from 'fs';
 import {
   APP_STORE_FOLDER,
   APP_STORE_TEMP,
+  APP_LOCAL_FOLDER
 } from './constant'
 
 
@@ -62,19 +63,15 @@ const createWindow = async () => {
   }
 
   if (!fs.existsSync(APP_STORE_FOLDER)) {
-    fs.mkdir(APP_STORE_FOLDER, (err) => {
-      if (err) {
-        return console.error(err);
-      }
-    });
+    fs.mkdirSync(APP_STORE_FOLDER);
   }
+
+  if (!fs.existsSync(APP_LOCAL_FOLDER)) {
+    fs.mkdirSync(APP_LOCAL_FOLDER);
+  }
+  
   if (!fs.existsSync(APP_STORE_TEMP)) {
-    fs.mkdir(APP_STORE_TEMP, (err) => {
-      if (err) {
-        return console.error(err);
-      }
-      console.log('Directory created successfully!');
-    });
+    fs.mkdirSync(APP_STORE_TEMP);
   }
 
   const RESOURCES_PATH = app.isPackaged

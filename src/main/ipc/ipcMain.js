@@ -27,6 +27,8 @@ import {
     validateToken,
 } from '../lib/web3.storage.module'
 
+import sha256File from 'sha256-file'
+
 import fs from 'fs'
 
 import { Blob, Buffer } from 'buffer';
@@ -34,13 +36,17 @@ import { File , getFilesFromPath } from 'web3.storage'
 import path from 'path';
 const { fork } = require('child_process');
 
+const {shell} = require('electron');
+
 import {
     APP_STORE_FOLDER,
     APP_STORE_TEMP,
     APP_STORE_MY_FILES_FOLDER,
+    APP_LOCAL_FOLDER,
     APP_STORE_FILES_SHARED_WITH_ME,
     SYNC_MY_FILE_JSON,
-    SYNC_FILES_SHARED_WITH_ME
+    SYNC_FILES_SHARED_WITH_ME,
+    SYNC_REPORT
 } from '../constant'
 
 export function createIPCMain(ipcMain) {
@@ -99,9 +105,55 @@ export function createIPCMain(ipcMain) {
         }
     })
 
+    ipcMain.on('encrypt-share-folder-password', async (event, args) => {
+        const {sharePublicKey, ownerPrivateKey, encryptedPassword, docInfo} = args;
+        const {success, plaintext} = await decryptStringTypeData(ownerPrivateKey, encryptedPassword);
+        if (success) {
+            const {success: encryptSuccess, cipher} = await encryptStringTypeData(sharePublicKey, plaintext)
+            if (encryptSuccess) {
+                event.reply('encrypt-share-folder-password', {success: encryptSuccess, _password: cipher, ...docInfo});
+            } else {
+                event.reply('encrypt-share-folder-password', {success: false, reason: 'fail to encrypt share password', ...docInfo});
+            }
+        } else {
+            event.reply('encrypt-share-folder-password', {success: false, reason: 'fail to decrypt share password', ...docInfo});
+        }
+    })
+
     ipcMain.on('encrypt-then-upload', async (event, args) => {
-        const {web3Token, path: filePath, password, fileInfo} = args
-        const {id} = fileInfo
+        let {web3Token, path: filePath, password, fileInfo} = args
+        const {id, reqType, cid: oldCid, filename, encrypted_password, privateKey, publicKey} = fileInfo
+        const originFilePath = `${APP_STORE_FOLDER}/${id}_${oldCid}_${filename}`
+        const localFilePath = `${APP_LOCAL_FOLDER}/${id}_${oldCid}_${filename}`
+        if (reqType === 'sync') {
+            if (!fs.existsSync(localFilePath) || !fs.existsSync(originFilePath)) {
+                event.reply('encrypt-then-upload', {
+                    success: false,
+                    message: 'Nothing to update'
+                });
+                return;
+            } 
+            const fileLocalSHA = sha256File(localFilePath);
+            const fileOriginSHA = sha256File(originFilePath)
+            if (fileLocalSHA === fileOriginSHA) {
+                event.reply('encrypt-then-upload', {
+                    success: false,
+                    message: 'Nothing to update'
+                });
+                return;
+            }
+            const { success, plaintext } = await decryptStringTypeData(privateKey, encrypted_password)
+            if (!success) {
+                event.reply('encrypt-then-upload', {
+                    success: false,
+                    message: 'Cannot decrypt file password'
+                });
+                return;
+            }
+            filePath = localFilePath
+            password = plaintext
+        }
+        
         const childProcess = fork(path.join(__dirname, '../bgProcess/fileEncrypt.js'))
         childProcess.send({type: 'start', info: {
             filePath,
@@ -123,19 +175,150 @@ export function createIPCMain(ipcMain) {
                     });
                     fs.rmdirSync(tempDir, { recursive: true, force: true })
                     fs.rmdirSync(encDir, { recursive: true, force: true })
+                    if (reqType === 'sync') {
+                        const newOriginFilePath = `${APP_STORE_FOLDER}/${id}_${cid}_${filename}`
+                        fs.copyFile(localFilePath, newOriginFilePath, (err) => {
+                            if (err) {
+                                console.log(err)
+                            };
+                            
+                        });
+                        fs.unlinkSync(localFilePath);
+                        fs.unlinkSync(originFilePath);
+                    }
                 }
             }
         })
     })
 
+    ipcMain.on('update-file', async (event, args) => {
+        const {web3Token, fileInfo} = args
+        const {id, cid: oldCid, filename, encrypted_password, privateKey, publicKey} = fileInfo
+        const originFilePath = `${APP_STORE_FOLDER}/${id}_${oldCid}_${filename}`
+        const localFilePath = `${APP_LOCAL_FOLDER}/${id}_${oldCid}_${filename}`
+        if (!fs.existsSync(localFilePath) || !fs.existsSync(originFilePath)) {
+            event.reply('update-file', {
+                success: false,
+                message: 'Nothing to update'
+            });
+            return;
+        } 
+        const fileLocalSHA = sha256File(localFilePath);
+        const fileOriginSHA = sha256File(originFilePath)
+        if (fileLocalSHA === fileOriginSHA) {
+            event.reply('update-file', {
+                success: false,
+                message: 'Nothing to update'
+            });
+            return;
+        }
+        const { success, plaintext } = await decryptStringTypeData(privateKey, encrypted_password)
+        if (!success) {
+            event.reply('update-file', {
+                success: false,
+                message: 'Cannot decrypt file password'
+            });
+            return;
+        }
+        const filePath = localFilePath
+        const password = plaintext
+
+        const childProcess = fork(path.join(__dirname, '../bgProcess/fileEncrypt.js'))
+        childProcess.send({type: 'start', info: {
+            filePath,
+            id,
+            password
+        }})
+        childProcess.on('message', async function (data) {
+            const {success, encDir, tempDir} = data
+            if (success) {
+                const pathFiles = await getFilesFromPath(encDir)
+                const cid = await storeFiles(web3Token, pathFiles);
+                event.reply('update-file', {
+                    success,
+                    ...fileInfo,
+                    cid,
+                });
+                fs.rmdirSync(tempDir, { recursive: true, force: true })
+                fs.rmdirSync(encDir, { recursive: true, force: true })
+                const newOriginFilePath = `${APP_STORE_FOLDER}/${id}_${cid}_${filename}`
+                fs.copyFile(localFilePath, newOriginFilePath, (err) => {
+                    if (err) {
+                        console.log(err)
+                    };
+                    
+                });
+                fs.unlinkSync(localFilePath);
+                fs.unlinkSync(originFilePath);
+            }
+        })
+    })
+
     ipcMain.on('open-file', async (event, args) => {
-        console.log(args)
+        const {web3Token, info} = args
+        const {cid, encrypted_password, id, privateKey, name} = info
+        const localFilePath = `${APP_LOCAL_FOLDER}/${id}_${cid}_${name}`
+        const originFilePath = `${APP_STORE_FOLDER}/${id}_${cid}_${name}`
+        if (fs.existsSync(localFilePath)) {
+            shell.openPath(localFilePath)
+        } else if (fs.existsSync(originFilePath)) {
+            fs.copyFile(originFilePath, localFilePath, (err) => {
+                if (err) {
+                    console.log(err)
+                };
+                shell.openPath(localFilePath)
+            });
+        } else {
+            const { success, plaintext } = await decryptStringTypeData(privateKey, encrypted_password)
+            if (success) {
+                const childProcess = fork(path.join(__dirname, '../bgProcess/retrieveAndDecrypt.js'))
+                childProcess.send({type: 'start', info: {
+                    web3Token, 
+                    info,
+                    cid,
+                    id,
+                    name,
+                    password: plaintext
+                }})
+                childProcess.on('message', async function (data) {
+                    const {success} = data
+                    if (success) {
+                        fs.copyFile(originFilePath, localFilePath, (err) => {
+                            if (err) {
+                                console.log(err)
+                            };
+                            shell.openPath(localFilePath)
+                        });
+                    }
+                })
+            }
+        }
     })
 
     ipcMain.on('encrypt-then-upload-to-shared-folder', async (event, args) => {
-        const {web3Token, path: filePath, password, fileInfo} = args
-        console.log(args)
-        const {id} = fileInfo
+        let {web3Token, path: filePath, password, fileInfo} = args
+        const {id, reqType, cid: oldCid, filename, privateKey, publicKey} = fileInfo
+        const originFilePath = `${APP_STORE_FOLDER}/${id}_${oldCid}_${filename}`
+        const localFilePath = `${APP_LOCAL_FOLDER}/${id}_${oldCid}_${filename}`
+        if (reqType === 'sync') {
+            if (!fs.existsSync(localFilePath) || !fs.existsSync(originFilePath)) {
+                event.reply('encrypt-then-upload-to-shared-folder', {
+                    success: false,
+                    message: 'Nothing to update'
+                });
+                return;
+            } 
+            const fileLocalSHA = sha256File(localFilePath);
+            const fileOriginSHA = sha256File(originFilePath)
+            if (fileLocalSHA === fileOriginSHA) {
+                event.reply('encrypt-then-upload-to-shared-folder', {
+                    success: false,
+                    message: 'Nothing to update'
+                });
+                return;
+            }
+            filePath = localFilePath
+        }
         const {success: decryptedPasswordStatus, plaintext: decryptedPassword} = await decryptStringTypeData(fileInfo.privateKey, password) 
         if (decryptedPasswordStatus) {
             const childProcess = fork(path.join(__dirname, '../bgProcess/fileEncrypt.js'))
@@ -156,17 +339,31 @@ export function createIPCMain(ipcMain) {
                     });
                     fs.rmdirSync(tempDir, { recursive: true, force: true })
                     fs.rmdirSync(encDir, { recursive: true, force: true })
+                    if (reqType === 'sync') {
+                        const newOriginFilePath = `${APP_STORE_FOLDER}/${id}_${cid}_${filename}`
+                        fs.copyFile(localFilePath, newOriginFilePath, (err) => {
+                            if (err) {
+                                console.log(err)
+                            };
+                        });
+                        fs.unlinkSync(localFilePath);
+                        fs.unlinkSync(originFilePath);
+                    }
                 }
             })
+        } else {
+            event.reply('encrypt-then-upload-to-shared-folder', {
+                success: false,
+                message: 'Cannot decrypt file password'
+            });
+            return;
         }
     })
 
     ipcMain.on('decrypt-then-download', async (event, args) => {
         const {web3Token, info} = args
-        console.log(args)
         const {cid, encrypted_password, id, privateKey, name} = info
         const { success, plaintext } = await decryptStringTypeData(privateKey, encrypted_password)
-        console.log(success, plaintext)
         if (success) {
             const childProcess = fork(path.join(__dirname, '../bgProcess/retrieveAndDecrypt.js'))
             childProcess.send({type: 'start', info: {
@@ -179,35 +376,31 @@ export function createIPCMain(ipcMain) {
             }})
             childProcess.on('message', async function (data) {
                 console.log(data);
-                // const {success, encDir, tempDir} = data
-                // if (success) {
-                //     const pathFiles = await getFilesFromPath(encDir)
-                //     const cid = await storeFiles(web3Token, pathFiles);
-                //     event.reply('encrypt-then-upload-to-shared-folder', {
-                //         success,
-                //         ...fileInfo,
-                //         cid
-                //     });
-                //     fs.rmdirSync(tempDir, { recursive: true, force: true })
-                //     fs.rmdirSync(encDir, { recursive: true, force: true })
-                // }
             })
         }
-        
+    })
 
-
-        // const fileRetrieve = await retrieveFiles(web3Token, cid)
-        // const file = fileRetrieve[0]
-        // const { success, plaintext } = await decryptStringTypeData(privateKey, encrypted_password)
-        // if (success) {
-        //     const decrypted = await decryptSingleFile(file, plaintext)
-        //     const buffer = Buffer.from( await decrypted.arrayBuffer() );
-        //     fs.writeFile(`${APP_STORE_FOLDER}/${id}_${cid}_${name}`, buffer, function (err) {
-        //         if (err) {
-        //             console.log(err);
-        //         }
-        //     });
-        // }
+    ipcMain.on('should-start-sync', async (event) => {
+        fs.readFile(SYNC_REPORT, (err, data) => {
+            if (err) {
+                console.log(err);
+            };
+            let report = JSON.parse(data);
+            const lastReport = report.lastReport
+            const currentTimeStamp = new Date().getTime()
+            const diff = currentTimeStamp - lastReport
+            const tenMinutes = 5 * 60 * 1000
+            const fifteenMinutes = 15 * 60 * 1000
+            if (report.status === 1 && diff > fifteenMinutes) {
+                event.reply('should-start-sync', {shouldStartSync: true})
+                return
+            }
+            if (report.status === 0 && diff > tenMinutes) {
+                event.reply('should-start-sync', {shouldStartSync: true})
+                return
+            } 
+            event.reply('should-start-sync', {shouldStartSync: false})
+        })
     })
 
     ipcMain.on('start-sync-data-from-contract', async (event, args) => {

@@ -31,6 +31,7 @@ import {getUrlParameter} from '../utils/url.utils'
 import {useHistory} from 'react-router-dom'
 import ShareFolderButton from '../components/ShareFolderButton'
 import DeleteButton from '../components/DeleteButton'
+import SyncSharedFolderFileButton from '../components/SyncSharedFolderFileButton'
 
 const { Dragger } = Upload;
 
@@ -177,7 +178,15 @@ export default function Shared() {
                     <div>
                         {record.isFolder  ? 
                             <a onClick={() => redirectToFolder(record.id)}>{!record.isTop && <FolderOpenOutlined />} {record.name}</a>:
-                            <span><FileProtectOutlined /> {record.name}</span>
+                            <a 
+                                onClick={() => window.electron.ipcRenderer.openFile(userCurrent.web3token , {
+                                    ...record,
+                                    privateKey: userCurrent.privateKey,
+                                    
+                                })}
+                            >
+                                <FileProtectOutlined /> {record.name}
+                            </a>
                         }
                     </div>
                 )
@@ -193,31 +202,26 @@ export default function Shared() {
                 return (
                     <div>
                         {!record.isFolder && !record.isTop && <div className="d-flex justify-content-evenly">
-                            <Tooltip title="Remove">
-                                <DeleteButton 
-                                    type="File" 
-                                    name={record.name} 
-                                    handleDelete={async () => {
-                                        window.contract.remove_shared_file({_folder: current.id, _file: record.id})
-                                        history.go(0)
-                                    }}
-                                />
-                            </Tooltip>
+                            <SyncSharedFolderFileButton {...record} root={current.root} folder={current.id} />
+                            <DeleteButton 
+                                type="File" 
+                                name={record.name} 
+                                handleDelete={async () => {
+                                    window.contract.remove_shared_file({_folder: current.id, _file: record.id})
+                                    history.go(0)
+                                }}
+                            />
                         </div>}
                         {record.isFolder && !record.isTop && <div className="d-flex justify-content-evenly">
-                            {current.root === null && <Tooltip title="Share">
-                                <ShareFolderButton {...record} />
-                            </Tooltip>}
-                            <Tooltip title="Remove">
-                                <DeleteButton 
-                                    type="Folder" 
-                                    name={record.name} 
-                                    handleDelete={async () => {
-                                        await window.contract.remove_shared_folder({_folder: record.id})
-                                        history.go(0)
-                                    }}
-                                />
-                            </Tooltip>
+                            {current.root === null && <ShareFolderButton {...record} />}
+                            <DeleteButton 
+                                type="Folder" 
+                                name={record.name} 
+                                handleDelete={async () => {
+                                    await window.contract.remove_shared_folder({_folder: record.id})
+                                    history.go(0)
+                                }}
+                            />
                         </div>}
                     </div>
                 )

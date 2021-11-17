@@ -23,7 +23,6 @@ export const getSharedFolderById = createAsyncThunk(
     'foldersSharedWithMe/getSharedFolderById',
     async ({id, owner}, thunkApi) => {
         const res = await window.contract.get_shared_folder_info({folder_id: id})
-        console.log(res)
         const {children, files} = res
         const root = await window.contract.get_root_shared_folder({_current: id, _account_id: owner})
         const childrenInDetail = await Promise.all(children.map(child => {

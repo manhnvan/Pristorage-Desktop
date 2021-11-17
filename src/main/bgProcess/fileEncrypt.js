@@ -56,6 +56,9 @@ process.on('message', async  function(message) {
         if (fs.existsSync(tempDir)) {
             fs.rmdirSync(tempDir)
         }
+        if (fs.existsSync(encDir)) {
+            fs.rmdirSync(encDir)
+        }
         fs.mkdirSync(tempDir)
         fs.mkdirSync(encDir)
         const fileChunkNames = await splitFileFunc(filePath, FILE_MAX_SIZE, tempDir)

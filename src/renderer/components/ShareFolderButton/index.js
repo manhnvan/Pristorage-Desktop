@@ -3,6 +3,8 @@ import {
     Button, 
     Modal, 
     Input,
+    Tooltip,
+    Select,
     message
 } from 'antd'
 import {
@@ -13,8 +15,11 @@ import * as Yup from 'yup';
 import { useFormik } from 'formik';
 import { useDispatch, useSelector } from 'react-redux';
 
+const {Option} = Select
+
 const accountValidationSchema = Yup.object().shape({
     account: Yup.string().required('Invalid account id'),
+    permissions: Yup.number().required('Invalid permission'),
 });
 
 const ShareFolderButton = (props) => {
@@ -26,44 +31,35 @@ const ShareFolderButton = (props) => {
     const accountFormik = useFormik({
         initialValues: {
             account: '',
+            permissions: ''
         },
         validationSchema: accountValidationSchema,
         onSubmit: async (values) => {
-            // console.log(props)
-            // const user = await window.contract.get_user({account_id: values.account})
-            // if (!user) {
-            //     message.error(`User "${values.account}" not found`)
-            //     return
-            // }
-            // const MattsRSAkey = createKeyPair(userCurrent.privateKey);
-            // const {plaintext, status: decryptStatus} = rsaDecrypt(props.folder_password, MattsRSAkey)
-            // if (decryptStatus !== "success") {
-            //     message.error(`Wrong user password`)
-            //     return
-            // }
-            // const {public_key} = user
-            // const {cipher, status} = rsaEncrypt(plaintext, public_key)
-            // if (status !== "success") {
-            //     message.error(`fail to encrypt password`)
-            //     return
-            // }
-            // const params = {
-            //     _folder_id: props.id, 
-            //     _doc_id: `${userCurrent.account}_${values.account}_${props.id}`, 
-            //     _share_with: values.account, 
-            //     _password: cipher
-            // }
-            // await window.contract.share_folder(params)
-            // history.go(0)
+            const user = await window.contract.get_user({account_id: values.account})
+            if (!user) {
+                message.error(`User "${values.account}" not found`)
+                return
+            }
+            const sharePublicKey = user.public_key
+            const ownerPrivateKey = userCurrent.privateKey
+            const encryptedPassword = props.folder_password
+            
+            const params = {
+                _folder_id: props.id, 
+                _doc_id: `${userCurrent.account}_${values.account}_${props.id}`, 
+                _share_with: values.account, 
+                _permissions: values.permissions
+            }
+            window.electron.ipcRenderer.encryptSharedFolderFilePassword(sharePublicKey, ownerPrivateKey, encryptedPassword, params)
         }
     })
 
     const {
-        values: accountValues, 
-        errors: accountErrors, 
-        handleChange: accountHandleChange, 
-        handleSubmit: accountHandleSubmit, 
-        setFieldValue: accountSetFieldValue
+        values, 
+        errors, 
+        handleChange, 
+        handleSubmit, 
+        setFieldValue
     } = accountFormik
 
     const [isModalShareVisible, setIsModalShareVisible] = useState(false);
@@ -78,20 +74,31 @@ const ShareFolderButton = (props) => {
 
     return (
         <>
-        <Button onClick={showModalShare}>
-            <ShareAltOutlined />
-        </Button>
+        <Tooltip title="Share">
+            <Button onClick={showModalShare}>
+                <ShareAltOutlined />
+            </Button>
+        </Tooltip>
         <Modal 
             title="Share folder" 
             visible={isModalShareVisible} 
-            onOk={accountHandleSubmit} 
+            onOk={handleSubmit} 
             onCancel={handleCancelShare}
         >
             <label className="form-label">Share with</label>
             <div className="input-group mb-3">
-                <Input placeholder="Account id" onChange={accountHandleChange('account')} />
+                <Input placeholder="Account id" onChange={handleChange('account')} />
             </div>
-            {accountErrors.account && <span className="error-text">{accountErrors.account}</span>}
+            {errors.account && <span className="error-text">{errors.account}</span>}
+
+            <div className="input-group mb-3">
+                <label className="form-label">Permission</label>
+                <Select style={{ width: '100%' }} onChange={(val) => setFieldValue('permissions', parseInt(val))}>
+                    <Option value="1">Read Only</Option>
+                    <Option value="2">Edit</Option>
+                </Select>
+            </div>
+            {errors.permissions && <span className="error-text">{errors.permissions}</span>}
         </Modal>
         </>
     )

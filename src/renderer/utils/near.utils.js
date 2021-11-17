@@ -39,7 +39,8 @@ export async function initContract() {
       'remove_file', 
       'remove_folder',
       'remove_shared_file',
-      'remove_shared_folder'
+      'remove_shared_folder',
+      'update_file'      
     ],
   })
 }
@@ -50,6 +51,5 @@ export function logout() {
 }
 
 export function login() {
-  console.log(nearConfig)
   window.walletConnection.requestSignIn(nearConfig.contractName)
 }

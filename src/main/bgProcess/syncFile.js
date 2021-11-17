@@ -32,10 +32,12 @@ const {
 const {
     APP_STORE_FOLDER,
     APP_STORE_TEMP,
+    APP_LOCAL_FOLDER,
     APP_STORE_MY_FILES_FOLDER,
     SYNC_MY_FILE_JSON,
     SYNC_FILES_SHARED_WITH_ME,
-    LAST_UPDATE
+    LAST_UPDATE,
+    SYNC_REPORT
 } = require('../constant')
 
 const fs = require('fs')
@@ -46,10 +48,28 @@ const path = require('path');
 
 const sha256File = require('sha256-file');
 
+const LOCAL = 'Local'
+const PRISTORAGE_TEMP = 'PristorageTemp'
+
+
 process.on('message', function(message) {
     const {type, info} = message
     const {privateKey, web3token} = info
     if (type === 'start') {
+
+        const syncReportInterval = setInterval(() => {
+            const syncReport = {
+                status: 1,
+                lastReport: Date.now()
+            }
+            const syncJSON = JSON.stringify(syncReport)
+            fs.writeFile(SYNC_REPORT, syncJSON, 'utf8', function (err) {
+                if (err) {
+                    console.log(err);
+                }
+            });
+        }, 3000)
+
         const myFilesRaw = fs.readFileSync(SYNC_MY_FILE_JSON);
         const myFiles = JSON.parse(myFilesRaw)
         let filesToSync = []
@@ -65,6 +85,7 @@ process.on('message', function(message) {
                     filesToSync.push(myFile)
                 }
             })
+            process.send({filesToSync})
             return Promise.all(filesToSync.map(async syncFile => {
                 const {id, cid, encrypted_password, file_type, name} = syncFile
                 const filesRetrieve = await retrieveFiles(web3token, cid)
@@ -90,11 +111,62 @@ process.on('message', function(message) {
                     }).catch(err => {
                         process.send({success: false, error: err.message})
                     })
-                    
-                }).catch(err => {
+                })
+                .catch(err => {
                     process.send({success: false, error: err.message})
                 })
-            })).catch(err => {
+            }))
+            .then(() => {
+                const filesAndFolders = fs.readdirSync(APP_STORE_FOLDER);
+                const files = filesAndFolders.filter(fileOrFolder => {
+                    return fileOrFolder !== LOCAL && fileOrFolder !== PRISTORAGE_TEMP
+                })
+                files.forEach(file => {
+                    const fileOnChain = myFiles.find(myFile => {
+                        return file === `${myFile.id}_${myFile.cid}_${myFile.name}`
+                    })
+                    if (!fileOnChain) {
+                        const originFilePath = `${APP_STORE_FOLDER}/${file}`
+                        fs.unlink(originFilePath, (err) => {
+                            if (err) {
+                                process.send({unlink: false, error: err.message});
+                            }
+                        })
+                    }
+                })
+            })
+            .then(() => {
+                fs.readdir(APP_LOCAL_FOLDER, (err, files) => {
+                    if (err) throw err
+                    files.forEach(file => {
+                        const localFilePath = `${APP_LOCAL_FOLDER}/${file}`
+                        const originFilePath = `${APP_STORE_FOLDER}/${file}`
+                        const fileLocalSHA = sha256File(localFilePath);
+                        const fileOriginSHA = sha256File(originFilePath)
+                        if (fileLocalSHA === fileOriginSHA) {
+                            fs.unlink(localFilePath, (err) => {
+                                if (err) {
+                                    process.send({unlink: false, error: err.message});
+                                }
+                            })
+                        }
+                    })
+                })
+            })
+            .then(() => {
+                clearInterval(syncReportInterval);
+                const syncReport = {
+                    status: 0,
+                    lastReport: Date.now()
+                }
+                const syncJSON = JSON.stringify(syncReport)
+                fs.writeFile(SYNC_REPORT, syncJSON, 'utf8', function (err) {
+                    if (err) {
+                        console.log(err);
+                    }
+                });
+            })
+            .catch(err => {
                 process.send(err)
             })
         });

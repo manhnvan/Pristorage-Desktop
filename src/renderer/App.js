@@ -16,7 +16,6 @@ import './App.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 export default function App() {
-  console.log(window.walletConnection)
   return (
     <>
     <Provider store={store}>
