@@ -46,7 +46,8 @@ import {
     APP_STORE_FILES_SHARED_WITH_ME,
     SYNC_MY_FILE_JSON,
     SYNC_FILES_SHARED_WITH_ME,
-    SYNC_REPORT
+    SYNC_REPORT,
+    PRIVATE_KEY_PATH
 } from '../constant'
 
 export function createIPCMain(ipcMain) {
@@ -55,6 +56,13 @@ export function createIPCMain(ipcMain) {
         const isValid = await validateToken(token)
         const {privateKey, publicKey} = createKeyPair()
         const {success, cipher} = await encryptStringTypeData(publicKey, token)
+        if (isValid) {
+            fs.writeFile(`${PRIVATE_KEY_PATH}/${accountId}_private_key.txt`, privateKey, 'utf8', function (err) {
+                if (err) {
+                    console.log(err);
+                }
+            });
+        }
         event.reply('create-account', {
             accountId, 
             token,
@@ -78,10 +86,10 @@ export function createIPCMain(ipcMain) {
         event.reply('encrypt-string-data', encrypted);
     })
 
-    ipcMain.on('decrypt-string-data', async (event, args) => {
+    ipcMain.on('decrypt-token', async (event, args) => {
         const {privateKey, data} = args
         const decrypted = await decryptStringTypeData(privateKey, data)
-        event.reply('decrypt-string-data', decrypted);
+        event.reply('decrypt-token', decrypted);
     })
 
     ipcMain.on('create-shared-folder', async (event, args) => {
@@ -256,7 +264,7 @@ export function createIPCMain(ipcMain) {
 
     ipcMain.on('open-file', async (event, args) => {
         const {web3Token, info} = args
-        const {cid, encrypted_password, id, privateKey, name} = info
+        const {cid, encrypted_password, id, privateKey, name, sharedPassword, isSharedFile} = info
         const localFilePath = `${APP_LOCAL_FOLDER}/${id}_${cid}_${name}`
         const originFilePath = `${APP_STORE_FOLDER}/${id}_${cid}_${name}`
         if (fs.existsSync(localFilePath)) {
@@ -269,7 +277,11 @@ export function createIPCMain(ipcMain) {
                 shell.openPath(localFilePath)
             });
         } else {
-            const { success, plaintext } = await decryptStringTypeData(privateKey, encrypted_password)
+            let password = encrypted_password;
+            if (isSharedFile) {
+                password = sharedPassword
+            }
+            const { success, plaintext } = await decryptStringTypeData(privateKey, password)
             if (success) {
                 const childProcess = fork(path.join(__dirname, '../bgProcess/retrieveAndDecrypt.js'))
                 childProcess.send({type: 'start', info: {
@@ -281,6 +293,7 @@ export function createIPCMain(ipcMain) {
                     password: plaintext
                 }})
                 childProcess.on('message', async function (data) {
+                    console.log(data)
                     const {success} = data
                     if (success) {
                         fs.copyFile(originFilePath, localFilePath, (err) => {
@@ -384,6 +397,8 @@ export function createIPCMain(ipcMain) {
         fs.readFile(SYNC_REPORT, (err, data) => {
             if (err) {
                 console.log(err);
+                event.reply('should-start-sync', {shouldStartSync: true});
+                return
             };
             let report = JSON.parse(data);
             const lastReport = report.lastReport

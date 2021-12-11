@@ -1,4 +1,4 @@
-const CONTRACT_NAME = 'test-pri-2.testnet'
+const CONTRACT_NAME = 'manhndev.testnet'
 function getConfig(env) {
   switch (env) {
 

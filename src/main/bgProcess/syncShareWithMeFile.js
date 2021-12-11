@@ -46,8 +46,11 @@ process.on('message', function(message) {
     const {type, info} = message
     const {privateKey, web3token} = info
     if (type === 'start') {
-        const sharedFileWithMeListRaw = fs.readFileSync(SYNC_FILES_SHARED_WITH_ME);
-        const sharedFileWithMeList = JSON.parse(sharedFileWithMeListRaw)
+        let sharedFileWithMeList = []
+        if (fs.existsSync(SYNC_FILES_SHARED_WITH_ME)) {
+            const sharedFileWithMeListRaw = fs.readFileSync(SYNC_FILES_SHARED_WITH_ME);
+            sharedFileWithMeList = JSON.parse(sharedFileWithMeListRaw)
+        }
         let filesToSync = []
         fs.readdir(APP_STORE_FOLDER, (err, files) => {
             sharedFileWithMeList.forEach(fileSharedWithMe => {

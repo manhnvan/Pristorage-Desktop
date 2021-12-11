@@ -118,34 +118,42 @@ export default function MainLayout({children}) {
         const myFiles = [...filesInSharedFolder, ...commonFiles]
 
         const private_key = window.localStorage.getItem(`${accountId}_private_key`)
+        console.log(current)
         window.electron.ipcRenderer.startSyncDataFromContract(current, myFiles, sharedFilesWithMe)
     }
 
     useEffect(() => {
         if (current?.privateKey) {
+            console.log(current)
             window.electron.ipcRenderer.shouldSyncStart()
+            window.electron.ipcRenderer.on('should-start-sync', async (args) => {
+                console.log(args)
+                const {shouldStartSync} = args
+                if (shouldStartSync) {
+                    fetchAllFileInfo()
+                }
+            })
         }
     }, [current])
 
     useEffect(() => {
         const checkBeforeEnter = async () => {
             const {accountId} = await window.walletConnection.account()
+            const private_key = window.localStorage.getItem(`${accountId}_private_key`)
+
             if (accountId) {
-                const private_key = window.localStorage.getItem(`${accountId}_private_key`)
-                try {
-                    const user = await window.contract.get_user({account_id: accountId})
-                    if (!user) {
-                        showModal()
-                    } else {
-                        if (!private_key) {
-                            setIsModalLoginVisible(true)
-                        } else {
-                            const {public_key, encrypted_token} = user
-                            window.electron.ipcRenderer.decryptStringTypeData(private_key, encrypted_token)
-                        }
-                    }
-                } catch(error) {
-                    console.log(error)
+                const user = await window.contract.get_user({account_id: accountId})
+                if (!user) {
+                    showModal()
+                    return
+                }
+
+                if (!private_key) {
+                    setIsModalLoginVisible(true)
+                    return
+                } else {
+                    const {public_key, encrypted_token} = user
+                    window.electron.ipcRenderer.decryptToken(private_key, encrypted_token)
                 }
             }
         }
@@ -174,12 +182,17 @@ export default function MainLayout({children}) {
             } else {
                 window.localStorage.setItem(`${accountId}_private_key`, privateKey)
                 window.localStorage.setItem(`${accountId}_web3_storage_token`, token)
-                await window.contract.sign_up({public_key: publicKey, encrypted_token: encryptedToken})
+                const currentTimeStamp = new Date().getTime()
+                await window.contract.sign_up({
+                    _public_key: publicKey, 
+                    _encrypted_token: encryptedToken,
+                    _created_at: currentTimeStamp
+                })
                 setIsModalVisible(false)
                 history.go(0)
             }
         });
-        window.electron.ipcRenderer.on('decrypt-string-data', async (args) => {
+        window.electron.ipcRenderer.on('decrypt-token', async (args) => {
             const {accountId} = await window.walletConnection.account()
             const private_key = window.localStorage.getItem(`${accountId}_private_key`)
             const user = await window.contract.get_user({account_id: accountId})
@@ -194,17 +207,9 @@ export default function MainLayout({children}) {
                     status: 0
                 }))
             } else {
-
+                showLoginModal()
             }
         });
-
-        window.electron.ipcRenderer.on('should-start-sync', async (args) => {
-            console.log(args)
-            const {shouldStartSync} = args
-            if (shouldStartSync) {
-                fetchAllFileInfo()
-            }
-        })
 
         window.electron.ipcRenderer.on('create-shared-folder', async (args) => {
             const {encrypted, data} = args

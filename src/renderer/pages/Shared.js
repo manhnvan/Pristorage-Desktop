@@ -151,7 +151,7 @@ export default function Shared() {
 
     const props = {
         name: 'file',
-        multiple: true,
+        multiple: false,
         onChange(info) {
             const { status } = info.file;
             if (status !== 'uploading') {
@@ -160,7 +160,7 @@ export default function Shared() {
         },
         onDrop(e) {
             console.log('Dropped files', e.dataTransfer.files);
-            fileSubmit(e.dataTransfer.files[0])
+            // fileSubmit(e.dataTransfer.files[0])
         },
     };
 
@@ -277,10 +277,10 @@ export default function Shared() {
                                     <InboxOutlined />
                                 </p>
                                 <p className="ant-upload-text">Click or drag file to this area to upload</p>
-                                <p className="ant-upload-hint">
+                                {/* <p className="ant-upload-hint">
                                     Support for a single or bulk upload. Strictly prohibit from uploading company data or other
                                     band files
-                                </p>
+                                </p> */}
                             </Dragger>,
                         </Modal>
                     </div>}

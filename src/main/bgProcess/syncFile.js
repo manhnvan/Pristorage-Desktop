@@ -70,8 +70,11 @@ process.on('message', function(message) {
             });
         }, 3000)
 
-        const myFilesRaw = fs.readFileSync(SYNC_MY_FILE_JSON);
-        const myFiles = JSON.parse(myFilesRaw)
+        let myFiles = []
+        if (fs.existsSync(SYNC_MY_FILE_JSON)) {
+            const myFilesRaw = fs.readFileSync(SYNC_MY_FILE_JSON);
+            myFiles = JSON.parse(myFilesRaw)
+        }
         let filesToSync = []
         fs.readdir(APP_STORE_FOLDER, (err, files) => {
             myFiles.forEach(myFile => {
@@ -141,14 +144,16 @@ process.on('message', function(message) {
                     files.forEach(file => {
                         const localFilePath = `${APP_LOCAL_FOLDER}/${file}`
                         const originFilePath = `${APP_STORE_FOLDER}/${file}`
-                        const fileLocalSHA = sha256File(localFilePath);
-                        const fileOriginSHA = sha256File(originFilePath)
-                        if (fileLocalSHA === fileOriginSHA) {
-                            fs.unlink(localFilePath, (err) => {
-                                if (err) {
-                                    process.send({unlink: false, error: err.message});
-                                }
-                            })
+                        if (fs.existsSync(localFilePath) && fs.existsSync(originFilePath)) {
+                            const fileLocalSHA = sha256File(localFilePath);
+                            const fileOriginSHA = sha256File(originFilePath)
+                            if (fileLocalSHA === fileOriginSHA) {
+                                fs.unlink(localFilePath, (err) => {
+                                    if (err) {
+                                        process.send({unlink: false, error: err.message});
+                                    }
+                                })
+                            }
                         }
                     })
                 })
@@ -167,7 +172,8 @@ process.on('message', function(message) {
                 });
             })
             .catch(err => {
-                process.send(err)
+                clearInterval(syncReportInterval);
+                process.send(err.message)
             })
         });
     }

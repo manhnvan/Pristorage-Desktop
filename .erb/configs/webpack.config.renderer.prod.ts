@@ -140,5 +140,11 @@ export default merge(baseConfig, {
       isBrowser: false,
       isDevelopment: process.env.NODE_ENV !== 'production',
     }),
+    new webpack.ProvidePlugin({
+      Buffer: ['buffer', 'Buffer'],
+    }),
+    new webpack.ProvidePlugin({
+      process: 'process/browser',
+    })
   ],
 });

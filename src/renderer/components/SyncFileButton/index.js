@@ -24,13 +24,13 @@ const SyncFileButton = (props) => {
 
     const showConfirm = () => {
         confirm({
-            title: `Do you Want to sync this file?`,
+            title: `Do you Want to update this file?`,
             icon: <ExclamationCircleOutlined />,
             content: name,
             onOk() {
                 const web3Token = userCurrent.web3token
                 window.electron.ipcRenderer.encryptThenUpload(web3Token, null, null, {
-                    reqType: 'sync',
+                    reqType: 'Update',
                     filename: name,
                     type: file_type,
                     id,
@@ -50,7 +50,7 @@ const SyncFileButton = (props) => {
 
     return (
         <>
-        <Tooltip title="Sync">
+        <Tooltip title="Update">
             <Button onClick={showConfirm} loading={loadingCurrent && commonFolderLoading}>
                 <SyncOutlined />
             </Button>

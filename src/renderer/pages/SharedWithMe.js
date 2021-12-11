@@ -156,7 +156,7 @@ export default function SharedWithMe() {
 
     const props = {
         name: 'file',
-        multiple: true,
+        multiple: false,
         onChange(info) {
             const { status } = info.file;
             if (status !== 'uploading') {
@@ -165,7 +165,7 @@ export default function SharedWithMe() {
         },
         onDrop(e) {
             console.log('Dropped files', e.dataTransfer.files);
-            fileSubmit(e.dataTransfer.files[0])
+            // fileSubmit(e.dataTransfer.files[0])
         },
     };
 
@@ -183,7 +183,7 @@ export default function SharedWithMe() {
                                 onClick={() => window.electron.ipcRenderer.openFile(userCurrent.web3token , {
                                     ...record,
                                     privateKey: userCurrent.privateKey,
-                                    
+                                    isSharedFile: true
                                 })}
                             >
                                 <FileProtectOutlined /> {record.name}
@@ -322,10 +322,10 @@ export default function SharedWithMe() {
                                     <InboxOutlined />
                                 </p>
                                 <p className="ant-upload-text">Click or drag file to this area to upload</p>
-                                <p className="ant-upload-hint">
+                                {/* <p className="ant-upload-hint">
                                     Support for a single or bulk upload. Strictly prohibit from uploading company data or other
                                     band files
-                                </p>
+                                </p> */}
                             </Dragger>,
                         </Modal>
                     </div>

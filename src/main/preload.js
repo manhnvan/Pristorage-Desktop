@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const validChannels = [
   'ipc-example', 
   'create-account', 
-  'decrypt-string-data',
+  'decrypt-token',
   'encrypt-string-data',
   'get-public-key-by-private-key',
   'encrypt-then-upload',
@@ -24,8 +24,8 @@ contextBridge.exposeInMainWorld('electron', {
     createAccount(accountId, token) {
       ipcRenderer.send('create-account', {accountId, token});
     },
-    decryptStringTypeData(privateKey, data) {
-      ipcRenderer.send('decrypt-string-data', {privateKey, data});
+    decryptToken(privateKey, data) {
+      ipcRenderer.send('decrypt-token', {privateKey, data});
     },
     shouldSyncStart() {
       ipcRenderer.send('should-start-sync');

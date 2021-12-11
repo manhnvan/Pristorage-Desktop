@@ -49,6 +49,7 @@ const sha256File = require('sha256-file');
 
 process.on('message', async  function(message) {
     const {type, info} = message
+    process.send(type)
     if (type === 'start') {
         const { web3Token, cid, id, name, password } = info
         const decDir = `${APP_STORE_TEMP}/DEC_${id}`
