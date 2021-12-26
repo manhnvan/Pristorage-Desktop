@@ -30,7 +30,7 @@ const SyncFileButton = (props) => {
             onOk() {
                 const web3Token = userCurrent.web3token
                 window.electron.ipcRenderer.encryptThenUpload(web3Token, null, null, {
-                    reqType: 'Update',
+                    reqType: 'sync',
                     filename: name,
                     type: file_type,
                     id,

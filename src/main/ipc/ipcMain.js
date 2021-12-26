@@ -129,6 +129,7 @@ export function createIPCMain(ipcMain) {
     })
 
     ipcMain.on('encrypt-then-upload', async (event, args) => {
+        console.log(args)
         let {web3Token, path: filePath, password, fileInfo} = args
         const {id, reqType, cid: oldCid, filename, encrypted_password, privateKey, publicKey} = fileInfo
         const originFilePath = `${APP_STORE_FOLDER}/${id}_${oldCid}_${filename}`
@@ -267,6 +268,7 @@ export function createIPCMain(ipcMain) {
         const {cid, encrypted_password, id, privateKey, name, sharedPassword, isSharedFile} = info
         const localFilePath = `${APP_LOCAL_FOLDER}/${id}_${cid}_${name}`
         const originFilePath = `${APP_STORE_FOLDER}/${id}_${cid}_${name}`
+        console.log(info)
         if (fs.existsSync(localFilePath)) {
             shell.openPath(localFilePath)
         } else if (fs.existsSync(originFilePath)) {
@@ -304,6 +306,8 @@ export function createIPCMain(ipcMain) {
                         });
                     }
                 })
+            } else {
+                console.log("fail to open")
             }
         }
     })
