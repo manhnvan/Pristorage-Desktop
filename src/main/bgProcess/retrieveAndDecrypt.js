@@ -68,7 +68,7 @@ process.on('message', async function(message) {
             const filePaths = names.map(name => {
                 return `${decDir}/${name}`
             })
-            process.send({success: false, names})
+            process.send({success: true, names})
             mergeFilesFunc(filePaths, `${APP_STORE_FOLDER}/${id}_${cid}_${name}`).then(() => {
                 fs.rmdirSync(decDir, { recursive: true, force: true })
                 process.send({success: true})

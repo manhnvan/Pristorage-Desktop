@@ -183,7 +183,8 @@ export default function SharedWithMe() {
                                 onClick={() => window.electron.ipcRenderer.openFile(userCurrent.web3token , {
                                     ...record,
                                     privateKey: userCurrent.privateKey,
-                                    isSharedFile: true
+                                    isSharedFile: true,
+                                    sharedPassword: record.sharedPassword ? record.sharedPassword : root.sharedPassword
                                 })}
                             >
                                 <FileProtectOutlined /> {record.name}
